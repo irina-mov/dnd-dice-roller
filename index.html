@@ -92,7 +92,7 @@
 </div>
 <button class="roll-btn" id="rollBtn" onclick="rollDice()">🎲 Бросить!</button>
 
-<script src="three.min.js"></script>
+<script src="three.min.js" onerror="window._threeLoadErr=true"></script>
 <script>
 /* ═══ DATA ═══════════════════════════════════════════════ */
 const DICE = {
@@ -406,7 +406,10 @@ function dbg(msg){
 
 function initThreeJS(){
   /* 1. Three.js вообще загружен? */
-  if(typeof THREE==='undefined'){ dbg('THREE не определён — скрипт не загрузился'); return; }
+  if(typeof THREE==='undefined'){
+    dbg(window._threeLoadErr ? 'three.min.js: ошибка загрузки файла' : 'THREE не определён — синтаксическая ошибка в скрипте');
+    return;
+  }
 
   /* 2. WebGL доступен? */
   const testCvs=document.createElement('canvas');
