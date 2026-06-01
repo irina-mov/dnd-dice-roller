@@ -1,12 +1,10 @@
 import os
+import asyncio
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-load_dotenv()  # читает .env при локальном запуске (на Railway .env не нужен — там переменные в настройках)
-
 WEB_APP_URL = "https://irina-mov.github.io/dnd-dice-roller/"
-BOT_TOKEN   = os.environ["BOT_TOKEN"]
 
 
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -21,9 +19,14 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 if __name__ == "__main__":
-    import asyncio
-    asyncio.set_event_loop(asyncio.new_event_loop())  # fix для Python 3.12+
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    load_dotenv()  # читает .env при локальном запуске
+
+    token = os.environ.get("BOT_TOKEN")
+    if not token:
+        raise SystemExit("Ошибка: переменная BOT_TOKEN не задана!")
+
+    asyncio.set_event_loop(asyncio.new_event_loop())
+    app = ApplicationBuilder().token(token).build()
     app.add_handler(CommandHandler("start", start))
     print("Бот запущен...")
     app.run_polling()
