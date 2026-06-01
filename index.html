@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DnD Dice Roller</title>
+  <style>
+    :root { --tray-main:#d44030; --tray-dark:#8b1a0a; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:'Georgia',serif; background:radial-gradient(ellipse at 50% 0%,#2d0a50 0%,#1a0a2e 65%); min-height:100vh; display:flex; flex-direction:column; align-items:center; padding:28px 20px 44px; color:#f0e0d0; }
+    h1 { font-size:2.5rem; color:#d4a052; text-shadow:0 0 30px rgba(212,160,82,.75),0 2px 6px rgba(0,0,0,.9); margin-bottom:5px; letter-spacing:4px; }
+    .subtitle { color:#9070b0; font-size:.85rem; margin-bottom:26px; letter-spacing:2px; font-style:italic; }
+
+    .dice-selector { display:flex; gap:7px; flex-wrap:wrap; justify-content:center; margin-bottom:12px; }
+    .dice-btn { background:linear-gradient(145deg,#2d1050,#1a0a2e); border:2px solid #4a2878; color:#c090e0; font-size:.9rem; font-weight:bold; font-family:Georgia,serif; padding:8px 18px; border-radius:9px; cursor:pointer; transition:all .18s; letter-spacing:1px; }
+    .dice-btn:hover  { border-color:#d4a052; color:#d4a052; box-shadow:0 0 12px rgba(212,160,82,.35); transform:translateY(-1px); }
+    .dice-btn.active { background:linear-gradient(145deg,#4a1070,#2d0a50); border-color:#d4a052; color:#d4a052; box-shadow:0 0 16px rgba(212,160,82,.45); }
+    .dice-desc { max-width:500px; text-align:center; color:#a888cc; font-size:.85rem; min-height:42px; margin-bottom:18px; line-height:1.6; font-style:italic; padding:0 10px; }
+
+    .pickers-row { display:flex; gap:28px; flex-wrap:wrap; justify-content:center; margin-bottom:24px; }
+    .picker-group { display:flex; align-items:center; gap:10px; }
+    .picker-label { color:#8060a0; font-size:.78rem; letter-spacing:1px; white-space:nowrap; }
+    .swatches { display:flex; gap:7px; }
+    .swatch { width:26px; height:26px; border-radius:50%; cursor:pointer; border:2px solid rgba(255,255,255,.15); transition:all .18s; padding:0; }
+    .swatch:hover  { transform:scale(1.22); border-color:rgba(255,255,255,.5); }
+    .swatch.active { border-color:#fff; box-shadow:0 0 10px rgba(255,255,255,.6); transform:scale(1.1); }
+
+    .tray-section { position:relative; width:380px; height:380px; margin-bottom:22px; }
+    .tray-outer { position:absolute; inset:0; clip-path:polygon(25% 0%,75% 0%,100% 50%,75% 100%,25% 100%,0% 50%); background:var(--tray-dark); filter:drop-shadow(0 10px 36px rgba(0,0,0,.75)); }
+    .tray-inner { position:absolute; inset:9px; clip-path:polygon(25% 0%,75% 0%,100% 50%,75% 100%,25% 100%,0% 50%); background:radial-gradient(ellipse at 42% 38%,var(--tray-main) 0%,var(--tray-dark) 100%); transition:background .4s; }
+    .tray-inner::after { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at 28% 24%,rgba(255,255,255,.13) 0%,transparent 52%); pointer-events:none; }
+    .tray-dot { position:absolute; width:13px; height:13px; border-radius:50%; background:radial-gradient(circle at 35% 35%,#e8cc80,#7a5010); border:1px solid #a07828; box-shadow:0 2px 6px rgba(0,0,0,.6); z-index:10; }
+
+    /* die area */
+    .die-area { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:5; }
+    #diceCanvas { width:290px; height:290px; display:block; }
+
+    /* SVG die */
+    .die-wrap { width:150px; height:150px; display:flex; align-items:center; justify-content:center; filter:drop-shadow(0 6px 18px rgba(0,0,0,.75)); }
+    .die-wrap svg { width:100%; height:100%; }
+    .die-wrap.rolling { animation:diceRoll 1.5s cubic-bezier(.22,.61,.36,1) forwards; }
+    @keyframes diceRoll {
+      0%  {transform:translate(0,0)   rotate(0deg)   scale(1);}
+      10% {transform:translate(14px,-55px)  rotate(80deg)  scale(1.12);}
+      22% {transform:translate(-22px,-88px) rotate(195deg) scale(1.26);}
+      34% {transform:translate(28px,-70px)  rotate(330deg) scale(1.22);}
+      46% {transform:translate(-12px,-30px) rotate(455deg) scale(1.13);}
+      58% {transform:translate(9px,13px)    rotate(558deg) scale(1.07);}
+      70% {transform:translate(-5px,-8px)   rotate(636deg) scale(1.04);}
+      100%{transform:translate(0,0)   rotate(720deg) scale(1);}
+    }
+
+    /* particles */
+    .particles { position:absolute; inset:0; pointer-events:none; overflow:visible; z-index:20; }
+    .particle  { position:absolute; left:50%; top:50%; border-radius:50%; animation:pflyout var(--dur) ease-out var(--delay) forwards; opacity:0; }
+    @keyframes pflyout { 0%{opacity:1;transform:translate(-50%,-50%)translate(0,0)scale(1);}100%{opacity:0;transform:translate(-50%,-50%)translate(var(--tx),var(--ty))scale(.1);} }
+
+    /* result */
+    .result-area   { text-align:center; margin-bottom:20px; min-height:80px; }
+    .result-label  { color:#7058a0; font-size:.8rem; margin-bottom:5px; letter-spacing:1px; min-height:20px; }
+    .result-number { font-size:3.2rem; font-weight:bold; color:#d4a052; text-shadow:0 0 24px rgba(212,160,82,.85),0 0 60px rgba(212,160,82,.3); line-height:1; transition:opacity .25s,transform .25s; }
+    .result-number.hidden { opacity:0; transform:scale(.7); }
+    .result-number.pop    { animation:popIn .35s cubic-bezier(.34,1.56,.64,1) forwards; }
+    @keyframes popIn { 0%{opacity:0;transform:scale(.5);}100%{opacity:1;transform:scale(1);} }
+
+    /* roll button */
+    .roll-btn { background:linear-gradient(135deg,#8b2050 0%,#c94070 45%,#d4a052 100%); background-size:200% 200%; border:none; color:#fff; font-size:1.1rem; font-family:Georgia,serif; font-weight:bold; padding:13px 50px; border-radius:13px; cursor:pointer; letter-spacing:3px; text-transform:uppercase; box-shadow:0 4px 22px rgba(201,64,112,.55); transition:transform .15s,box-shadow .15s,opacity .2s; animation:shimmer 3.5s ease infinite; }
+    @keyframes shimmer { 0%,100%{background-position:0% 50%} 50%{background-position:100% 50%} }
+    .roll-btn:hover:not(:disabled) { transform:translateY(-3px); box-shadow:0 8px 28px rgba(201,64,112,.75); }
+    .roll-btn:active:not(:disabled){ transform:translateY(0); }
+    .roll-btn:disabled { opacity:.55; cursor:not-allowed; }
+  </style>
+</head>
+<body>
+<h1>⚔ DnD Dice Roller</h1>
+<p class="subtitle">Бросай кубики судьбы</p>
+<div class="dice-selector" id="diceSelector"></div>
+<div class="dice-desc" id="diceDesc"></div>
+<div class="pickers-row">
+  <div class="picker-group"><span class="picker-label">Цвет куба:</span><div class="swatches" id="diceSwatches"></div></div>
+  <div class="picker-group"><span class="picker-label">Цвет лотка:</span><div class="swatches" id="traySwatches"></div></div>
+</div>
+<div class="tray-section" id="traySection">
+  <div class="tray-outer"></div><div class="tray-inner"></div>
+  <div class="die-area" id="dieArea"></div>
+  <div class="particles" id="particles"></div>
+</div>
+<div class="result-area">
+  <div class="result-label"  id="resultLabel">Выберите куб и бросьте!</div>
+  <div class="result-number hidden" id="resultNumber">1</div>
+</div>
+<button class="roll-btn" id="rollBtn" onclick="rollDice()">🎲 Бросить!</button>
+
+<script>
+/* ═══ DATA ═══════════════════════════════════════════════ */
+const DICE = {
+  d4:  {sides:4,  step:1,  label:'d4',  name:'D4 — Четырёхгранник',    desc:'Базовый урон лёгким оружием или исцеление.'},
+  d6:  {sides:6,  step:1,  label:'d6',  name:'D6 — Шестигранник',       desc:'Параметры персонажа и заклинания.'},
+  d8:  {sides:8,  step:1,  label:'d8',  name:'D8 — Восьмигранник',      desc:'Средний урон оружием и заклинаниями.'},
+  d10: {sides:10, step:1,  label:'d10', name:'D10 — Десятигранник',     desc:'Тяжёлый урон оружием.'},
+  d100:{sides:100,step:10, label:'d100',name:'D100 — Процентиль',        desc:'Числа 10–100. В паре с D10 для процентного броска.'},
+  d12: {sides:12, step:1,  label:'d12', name:'D12 — Двенадцатигранник', desc:'Урон тяжёлым двуручным оружием.'},
+  d20: {sides:20, step:1,  label:'d20', name:'D20 — Двадцатигранник',   desc:'Главный кубик D&D! Проверки навыков, атаки, спасброски.'},
+};
+const DIE_CFG = {
+  d4:  {nums:[1,2,3,4],                                                   perGroup:1},
+  d6:  {nums:[1,6,2,5,3,4],                                               perGroup:2},
+  d8:  {nums:[1,2,3,4,5,6,7,8],                                           perGroup:1},
+  d10: {nums:[1,2,3,4,5,6,7,8,9,10],                                      perGroup:2},
+  d100:{nums:[10,20,30,40,50,60,70,80,90,100],                             perGroup:2},
+  d12: {nums:[1,2,3,4,5,6,7,8,9,10,11,12],                               perGroup:3},
+  d20: {nums:[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20],       perGroup:1},
+};
+const DICE_COLORS = [
+  {name:'Малиновый',hex:'#c94070',spec:'#f0b0cc',dark:'#7b1040'},
+  {name:'Красный',  hex:'#c0392b',spec:'#ff9090',dark:'#7a1010'},
+  {name:'Синий',    hex:'#2457b5',spec:'#90c0ff',dark:'#0f2d6e'},
+  {name:'Зелёный', hex:'#1e7a42',spec:'#80ffb0',dark:'#0a3f20'},
+  {name:'Фиолет.', hex:'#7b2d8b',spec:'#d090ff',dark:'#3d1050'},
+  {name:'Чёрный',  hex:'#1a1a2e',spec:'#8090ff',dark:'#0a0a18'},
+  {name:'Белый',   hex:'#c8c8d8',spec:'#ffffff', dark:'#888898'},
+  {name:'Золотой', hex:'#b8860b',spec:'#fff0a0', dark:'#7a5600'},
+];
+const TRAY_COLORS = [
+  {name:'Красный',    main:'#d44030',dark:'#8b1a0a'},
+  {name:'Чёрный',     main:'#3d3d3d',dark:'#111111'},
+  {name:'Белый',      main:'#d8d8d8',dark:'#909090'},
+  {name:'Жёлтый',    main:'#e0c020',dark:'#907800'},
+  {name:'Зелёный',   main:'#2a8b50',dark:'#10502a'},
+  {name:'Фиолетовый',main:'#7b2d8b',dark:'#441060'},
+  {name:'Синий',      main:'#2457b5',dark:'#0f2d6e'},
+];
+
+let currentDice   = 'd20';
+let currentDieClr = DICE_COLORS[0];
+let isRolling     = false;
+let dieSettled    = false;
+
+/* ═══ HELPERS ════════════════════════════════════════════ */
+function lighten(hex,a){
+  const n=parseInt(hex.slice(1),16);
+  return '#'+[n>>16&0xff,n>>8&0xff,n&0xff].map(c=>Math.min(255,c+Math.round(255*a)).toString(16).padStart(2,'0')).join('');
+}
+function rollVal(sides,step){return(Math.floor(Math.random()*(sides/step))+1)*step;}
+
+/* ═══ UI INIT ════════════════════════════════════════════ */
+(function initUI(){
+  /* dice buttons */
+  const sel=document.getElementById('diceSelector');
+  Object.keys(DICE).forEach(k=>{
+    const b=document.createElement('button');
+    b.className='dice-btn'+(k===currentDice?' active':'');
+    b.textContent=DICE[k].label.toUpperCase();
+    b.addEventListener('click',()=>selectDice(k)); sel.appendChild(b);
+  });
+  /* die colour swatches */
+  const ds=document.getElementById('diceSwatches');
+  DICE_COLORS.forEach((dc,i)=>{
+    const b=document.createElement('button');
+    b.className='swatch'+(i===0?' active':'');
+    b.style.background=`radial-gradient(circle at 35% 35%,${dc.hex}ee,${dc.dark})`;
+    b.title=dc.name;
+    b.addEventListener('click',()=>{
+      currentDieClr=dc; rebuildDie();
+      ds.querySelectorAll('.swatch').forEach(s=>s.classList.remove('active')); b.classList.add('active');
+    }); ds.appendChild(b);
+  });
+  /* tray colour swatches */
+  const ts=document.getElementById('traySwatches');
+  TRAY_COLORS.forEach((tc,i)=>{
+    const b=document.createElement('button');
+    b.className='swatch'+(i===0?' active':'');
+    b.style.background=`radial-gradient(circle at 35% 35%,${tc.main},${tc.dark})`;
+    b.title=tc.name;
+    b.addEventListener('click',()=>{
+      document.documentElement.style.setProperty('--tray-main',tc.main);
+      document.documentElement.style.setProperty('--tray-dark',tc.dark);
+      ts.querySelectorAll('.swatch').forEach(s=>s.classList.remove('active')); b.classList.add('active');
+    }); ts.appendChild(b);
+  });
+  /* tray dots */
+  const tray=document.getElementById('traySection');
+  [[.25,0],[.75,0],[1,.5],[.75,1],[.25,1],[0,.5]].forEach(([px,py])=>{
+    const d=document.createElement('div'); d.className='tray-dot';
+    d.style.left=`${px*380-6.5}px`; d.style.top=`${py*380-6.5}px`; tray.appendChild(d);
+  });
+  document.getElementById('dieArea').addEventListener('click',()=>rollDice());
+})();
+
+/* ═══ SVG 2-D DICE (always available) ════════════════════ */
+let svgWrap=null;
+
+function buildSVGDie(num){
+  const area=document.getElementById('dieArea');
+  if(!svgWrap){
+    area.innerHTML='';
+    svgWrap=document.createElement('div'); svgWrap.className='die-wrap'; area.appendChild(svgWrap);
+  }
+  svgWrap.innerHTML=makeSVG(currentDice,num!==undefined?num:rollVal(DICE[currentDice].sides,DICE[currentDice].step));
+}
+
+function makeSVG(type,number){
+  const clr=currentDieClr;
+  const g=`<defs>
+    <radialGradient id="pg" cx="36%" cy="30%" r="72%">
+      <stop offset="0%"   stop-color="${lighten(clr.hex,.42)}"/>
+      <stop offset="35%"  stop-color="${clr.hex}"/>
+      <stop offset="75%"  stop-color="${clr.spec}"/>
+      <stop offset="100%" stop-color="${clr.dark}"/>
+    </radialGradient>
+    <radialGradient id="sh" cx="30%" cy="24%" r="36%">
+      <stop offset="0%"   stop-color="rgba(255,255,255,.46)"/>
+      <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+    </radialGradient>
+  </defs>`;
+  const s=String(number).length;
+  const fz=s>=3?32:s===2?42:54;
+  const txt=(x,y,v)=>`<text x="${x}" y="${y}"
+    font-family="Georgia,serif" fill="white" font-weight="bold"
+    text-anchor="middle" dominant-baseline="central" font-size="${fz}"
+    paint-order="stroke" stroke="rgba(0,0,0,.85)" stroke-width="5"
+    stroke-linejoin="round">${v}</text>`;
+  const w=b=>`<svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">${g}${b}</svg>`;
+  const shapes={
+    d4: ()=>w(`<polygon points="150,16 284,264 16,264"         fill="url(#pg)" stroke="${clr.spec}" stroke-width="2"/>
+               <polygon points="150,16 284,264 16,264"         fill="url(#sh)" opacity=".6"/>${txt(150,208,number)}`),
+    d6: ()=>w(`<rect x="22" y="22" width="256" height="256" rx="28" fill="url(#pg)" stroke="${clr.spec}" stroke-width="2"/>
+               <rect x="22" y="22" width="256" height="256" rx="28" fill="url(#sh)" opacity=".6"/>${txt(150,152,number)}`),
+    d8: ()=>w(`<polygon points="150,12 288,150 150,288 12,150"  fill="url(#pg)" stroke="${clr.spec}" stroke-width="2"/>
+               <polygon points="150,12 288,150 150,288 12,150"  fill="url(#sh)" opacity=".6"/>${txt(150,152,number)}`),
+    d10:()=>w(`<polygon points="150,12 274,168 150,290 26,168"  fill="url(#pg)" stroke="${clr.spec}" stroke-width="2"/>
+               <polygon points="150,12 274,168 150,290 26,168"  fill="url(#sh)" opacity=".6"/>${txt(150,182,number)}`),
+    d100:()=>w(`<polygon points="150,12 274,168 150,290 26,168" fill="url(#pg)" stroke="${clr.spec}" stroke-width="2"/>
+                <polygon points="150,12 274,168 150,290 26,168" fill="url(#sh)" opacity=".6"/>${txt(150,182,number)}`),
+    d12:()=>{
+      const pts=Array.from({length:5},(_,i)=>{const a=(i*72-90)*Math.PI/180;return`${150+135*Math.cos(a)},${158+135*Math.sin(a)}`;}).join(' ');
+      return w(`<polygon points="${pts}" fill="url(#pg)" stroke="${clr.spec}" stroke-width="2"/>
+                <polygon points="${pts}" fill="url(#sh)" opacity=".6"/>${txt(150,164,number)}`);
+    },
+    d20:()=>w(`<polygon points="150,10 292,274 8,274"           fill="url(#pg)" stroke="${clr.spec}" stroke-width="2"/>
+               <polygon points="150,10 292,274 8,274"           fill="url(#sh)" opacity=".6"/>${txt(150,216,number)}`),
+  };
+  return(shapes[type]||shapes.d20)();
+}
+
+/* ═══ THREE.JS 3-D DICE (optional enhancement) ═══════════ */
+let useThree=false;
+let renderer,scene,camera,dieMesh,edgeMesh;
+let rollingNow=false, settling=false;
+let rollStart=0, settleStart=0;
+let settleQA=null, settleQB=null;
+let onSpinEnd=null, onSettleEnd=null, idleT=0;
+
+/* Load script with timeout so a hanging CDN doesn't block forever */
+function loadScript(src,ms=4000){
+  return new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    const tid=setTimeout(()=>{s.onload=s.onerror=null;s.remove();rej('timeout');},ms);
+    s.onload=()=>{clearTimeout(tid);res();};
+    s.onerror=()=>{clearTimeout(tid);rej('error');};
+    s.src=src; document.head.appendChild(s);
+  });
+}
+async function tryLoadThree(){
+  const cdns=[
+    'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js',
+    'https://unpkg.com/three@0.160.0/build/three.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js',
+    'https://cdn.skypack.dev/three@0.160.0/build/three.module.js',
+  ];
+  for(const cdn of cdns){
+    try{ await loadScript(cdn,4500); if(typeof THREE!=='undefined') return true; }catch(_){}
+  }
+  return false;
+}
+
+/* ── Geometry helpers ──────────────────────────────────── */
+function lightenHex(hex,a){ return lighten(hex,a); }
+
+function makeFaceTex(num){
+  const S=512, c=document.createElement('canvas'); c.width=c.height=S;
+  const ctx=c.getContext('2d');
+  /* background */
+  const grd=ctx.createRadialGradient(S*.34,S*.28,4,S/2,S/2,S*.65);
+  grd.addColorStop(0,lighten(currentDieClr.hex,.44));
+  grd.addColorStop(.4,currentDieClr.hex);
+  grd.addColorStop(1,currentDieClr.dark);
+  ctx.fillStyle=grd; ctx.fillRect(0,0,S,S);
+  /* highlight */
+  const hi=ctx.createRadialGradient(S*.25,S*.20,0,S*.32,S*.26,S*.25);
+  hi.addColorStop(0,'rgba(255,255,255,.30)'); hi.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle=hi; ctx.fillRect(0,0,S,S);
+  /* number */
+  const str=String(num), l=str.length;
+  const fz=l>=3?112:l===2?144:180;
+  ctx.font=`bold ${fz}px Georgia,serif`;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.shadowBlur=0; ctx.shadowColor='transparent';
+  ctx.strokeStyle='rgba(0,0,0,.9)'; ctx.lineWidth=22; ctx.lineJoin='round';
+  ctx.strokeText(str,S/2,S/2);
+  ctx.strokeStyle=currentDieClr.spec; ctx.lineWidth=8; ctx.strokeText(str,S/2,S/2);
+  ctx.fillStyle='#fff'; ctx.fillText(str,S/2,S/2);
+  const t=new THREE.CanvasTexture(c);
+  t.minFilter=THREE.LinearFilter; t.magFilter=THREE.LinearFilter; t.generateMipmaps=false;
+  return t;
+}
+
+function applyUVs(geo,type){
+  const N=geo.attributes.position.count, uv=new Float32Array(N*2);
+  if(type==='d6'){
+    // Tri1: A(tl) B(tr) D(bl)  Tri2: B(tr) C(br) D(bl) — shared edge B→D consistent
+    for(let i=0;i<N;i+=6){const b=i*2;
+      uv[b]=.02;uv[b+1]=.98;uv[b+2]=.98;uv[b+3]=.98;uv[b+4]=.02;uv[b+5]=.02;
+      uv[b+6]=.98;uv[b+7]=.98;uv[b+8]=.98;uv[b+9]=.02;uv[b+10]=.02;uv[b+11]=.02;}
+  }else if(type==='d10'||type==='d100'){
+    // Tri1: apex_top(top) lower[0](bottom) upper[0](left)
+    // Tri2: apex_top(top) upper[1](right) lower[0](bottom) — shared edge apex_top↔lower[0] consistent
+    for(let i=0;i<N;i+=6){const b=i*2;
+      uv[b]=.5;uv[b+1]=.03;uv[b+2]=.5;uv[b+3]=.97;uv[b+4]=.03;uv[b+5]=.52;
+      uv[b+6]=.5;uv[b+7]=.03;uv[b+8]=.97;uv[b+9]=.52;uv[b+10]=.5;uv[b+11]=.97;}
+  }else if(type==='d12'){
+    const R=.44,pc=k=>[.5+R*Math.cos(k/5*Math.PI*2-Math.PI/2),.5+R*Math.sin(k/5*Math.PI*2-Math.PI/2)];
+    const p=[pc(0),pc(1),pc(2),pc(3),pc(4)];
+    for(let f=0;f<N/9;f++){const b=f*18;
+      uv[b]=p[0][0];uv[b+1]=p[0][1];uv[b+2]=p[1][0];uv[b+3]=p[1][1];uv[b+4]=p[2][0];uv[b+5]=p[2][1];
+      uv[b+6]=p[0][0];uv[b+7]=p[0][1];uv[b+8]=p[2][0];uv[b+9]=p[2][1];uv[b+10]=p[3][0];uv[b+11]=p[3][1];
+      uv[b+12]=p[0][0];uv[b+13]=p[0][1];uv[b+14]=p[3][0];uv[b+15]=p[3][1];uv[b+16]=p[4][0];uv[b+17]=p[4][1];}
+  }else{
+    for(let i=0;i<N;i+=3){const b=i*2;
+      uv[b]=.5;uv[b+1]=.95;uv[b+2]=.05;uv[b+3]=.05;uv[b+4]=.95;uv[b+5]=.05;}
+  }
+  geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+}
+
+function buildD10geo(){
+  const n=5,r=1,yU=.22,yL=-.22,yT=1.42,yB=-1.42, v=[[0,yT,0]];
+  for(let i=0;i<n;i++){const a=(i/n)*Math.PI*2;v.push([r*Math.cos(a),yU,r*Math.sin(a)]);}
+  for(let i=0;i<n;i++){const a=((i+.5)/n)*Math.PI*2;v.push([r*Math.cos(a),yL,r*Math.sin(a)]);}
+  v.push([0,yB,0]);
+  const pos=[],add=(a,b,c)=>pos.push(...v[a],...v[b],...v[c]);
+  for(let i=0;i<n;i++){const u0=1+i,u1=1+(i+1)%n,l0=6+i,l1=6+(i+1)%n;
+    add(0,l0,u0);add(0,u1,l0);add(11,u1,l1);add(11,l0,u1);}
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); return g;
+}
+
+/* ── Dispose helper ──────────────────────────────────────*/
+function disposeMesh(m){
+  if(!m)return; scene.remove(m); m.geometry.dispose();
+  const mat=m.material;
+  (Array.isArray(mat)?mat:[mat]).forEach(x=>{if(x.map)x.map.dispose();x.dispose();});
+}
+
+/* ── Build 3-D die mesh ──────────────────────────────────*/
+function buildDie3D(){
+  disposeMesh(dieMesh); disposeMesh(edgeMesh); dieMesh=edgeMesh=null;
+  const cfg=DIE_CFG[currentDice];
+  let raw;
+  if(currentDice==='d4')       raw=new THREE.TetrahedronGeometry(1.25,0);
+  else if(currentDice==='d6')  raw=new THREE.BoxGeometry(1.7,1.7,1.7);
+  else if(currentDice==='d8')  raw=new THREE.OctahedronGeometry(1.4,0);
+  else if(currentDice==='d10'||currentDice==='d100') raw=buildD10geo();
+  else if(currentDice==='d12') raw=new THREE.DodecahedronGeometry(1.2,0);
+  else                         raw=new THREE.IcosahedronGeometry(1.3,0);
+
+  const edgeGeo=new THREE.EdgesGeometry(raw,15);
+  let geo;
+  if(raw.index!==null){geo=raw.toNonIndexed();raw.dispose();}else{geo=raw;}
+  geo.computeVertexNormals();
+  applyUVs(geo,currentDice);
+  geo.clearGroups&&geo.clearGroups();
+  cfg.nums.forEach((_,i)=>geo.addGroup(i*cfg.perGroup*3,cfg.perGroup*3,i));
+
+  const mats=cfg.nums.map(n=>new THREE.MeshPhongMaterial({
+    map:makeFaceTex(n), specular:new THREE.Color(currentDieClr.spec),
+    shininess:95, flatShading:true,
+  }));
+  dieMesh=new THREE.Mesh(geo,mats); scene.add(dieMesh);
+  edgeMesh=new THREE.LineSegments(edgeGeo,new THREE.LineBasicMaterial({color:0xd4a052}));
+  scene.add(edgeMesh);
+}
+
+/* ── Face settle: rotate result face toward camera ───────*/
+function settleFace(faceIdx){
+  const cfg=DIE_CFG[currentDice];
+  const vStart=faceIdx*cfg.perGroup*3;
+  const nA=dieMesh.geometry.attributes.normal;
+  const fn=new THREE.Vector3().fromBufferAttribute(nA,vStart).normalize();
+  const baseQ=new THREE.Quaternion().setFromUnitVectors(fn,new THREE.Vector3(0,0,1));
+  /* random spin around camera-axis so die varies per roll */
+  const spinQ=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,1),Math.random()*Math.PI*2);
+  settleQB=new THREE.Quaternion().multiplyQuaternions(spinQ,baseQ);
+  settleQA=dieMesh.quaternion.clone();
+  settleStart=Date.now(); settling=true;
+}
+
+/* ── Init Three.js renderer ──────────────────────────────*/
+function initThreeJS(){
+  useThree=true;
+  const area=document.getElementById('dieArea');
+  const cvs=document.createElement('canvas'); cvs.id='diceCanvas';
+  area.innerHTML=''; svgWrap=null; area.appendChild(cvs);
+
+  renderer=new THREE.WebGLRenderer({canvas:cvs,alpha:true,antialias:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  renderer.setSize(290,290);
+
+  scene=new THREE.Scene();
+  camera=new THREE.PerspectiveCamera(42,1,0.1,100);
+  camera.position.set(0,0,4.8);
+
+  scene.add(new THREE.AmbientLight(0xffffff,.50));
+  const sun=new THREE.DirectionalLight(0xffffff,.90); sun.position.set(5,8,6); scene.add(sun);
+  const gld=new THREE.PointLight(0xd4a052,2.2,12); gld.position.set(-3,2,3); scene.add(gld);
+  const pnk=new THREE.PointLight(0xff80c0,1.0,12); pnk.position.set(2,-3,2);  scene.add(pnk);
+
+  /* rebuild current die in 3D */
+  dieSettled=false; settling=false; rollingNow=false;
+  buildDie3D();
+
+  (function loop(){
+    requestAnimationFrame(loop);
+    if(!dieMesh){renderer.render(scene,camera);return;}
+
+    if(rollingNow){
+      const t=Math.min((Date.now()-rollStart)/1500,1);
+      const spd=1-Math.pow(t,2.5);
+      dieMesh.rotation.x+=.06+spd*.20; dieMesh.rotation.y+=.09+spd*.28; dieMesh.rotation.z+=.04+spd*.10;
+      dieMesh.scale.setScalar(1+.15*Math.sin(t*Math.PI*4)*(1-t));
+      dieMesh.position.y=.42*Math.sin(t*Math.PI)*(1-t*.4);
+      if(t>=1){rollingNow=false;dieMesh.scale.setScalar(1);dieMesh.position.set(0,0,0);if(onSpinEnd){onSpinEnd();onSpinEnd=null;}}
+    }else if(settling){
+      const t=Math.min((Date.now()-settleStart)/680,1);
+      const ease=1-Math.pow(1-t,3);
+      /* compatible slerp: copy qa, then slerp toward qb by ease */
+      dieMesh.quaternion.copy(settleQA).slerp(settleQB,ease);
+      if(t>=1){settling=false;dieSettled=true;if(onSettleEnd){onSettleEnd();onSettleEnd=null;}}
+    }else if(!dieSettled){
+      idleT+=.008;
+      dieMesh.rotation.y+=.007; dieMesh.rotation.x=Math.sin(idleT*.6)*.09; dieMesh.position.y=Math.sin(idleT)*.05;
+      dieMesh.scale.setScalar(1);
+    }
+    if(edgeMesh){edgeMesh.quaternion.copy(dieMesh.quaternion);edgeMesh.position.copy(dieMesh.position);edgeMesh.scale.copy(dieMesh.scale);}
+    renderer.render(scene,camera);
+  })();
+}
+
+/* ═══ SELECT / REBUILD ═══════════════════════════════════ */
+function rebuildDie(){
+  if(useThree) buildDie3D();
+  else buildSVGDie();
+}
+
+function selectDice(key){
+  currentDice=key;
+  document.querySelectorAll('.dice-btn').forEach((b,i)=>b.classList.toggle('active',Object.keys(DICE)[i]===key));
+  document.getElementById('diceDesc').textContent=`${DICE[key].name} — ${DICE[key].desc}`;
+  dieSettled=false; settling=false; rollingNow=false;
+  rebuildDie();
+}
+
+/* ═══ ROLL ═══════════════════════════════════════════════ */
+function rollDice(){
+  if(isRolling)return;
+  isRolling=true; dieSettled=false; settling=false;
+
+  const d=DICE[currentDice], final=rollVal(d.sides,d.step);
+  const btn=document.getElementById('rollBtn');
+  const rNum=document.getElementById('resultNumber');
+  const rLbl=document.getElementById('resultLabel');
+
+  btn.disabled=true; rNum.classList.add('hidden'); rLbl.textContent='... бросаем ...';
+
+  const scramble=setInterval(()=>{
+    const v=rollVal(d.sides,d.step);
+    rNum.textContent=v;
+    if(!useThree&&svgWrap)svgWrap.innerHTML=makeSVG(currentDice,v);
+  },90);
+
+  const showResult=()=>{
+    clearInterval(scramble);
+    if(!useThree&&svgWrap)svgWrap.innerHTML=makeSVG(currentDice,final);
+    rNum.classList.remove('hidden','pop'); void rNum.offsetWidth; rNum.classList.add('pop');
+    rNum.textContent=final; rLbl.textContent=DICE[currentDice].name;
+  };
+
+  if(useThree){
+    rollingNow=true; rollStart=Date.now();
+    onSpinEnd=()=>{
+      showResult();
+      const fi=DIE_CFG[currentDice].nums.indexOf(final);
+      settleFace(fi>=0?fi:0);
+      onSettleEnd=()=>{isRolling=false;btn.disabled=false;spawnParticles();};
+    };
+  }else{
+    svgWrap&&svgWrap.classList.remove('rolling'); void svgWrap?.offsetWidth; svgWrap&&svgWrap.classList.add('rolling');
+    setTimeout(()=>{showResult();isRolling=false;btn.disabled=false;spawnParticles();},1500);
+  }
+}
+
+function spawnParticles(){
+  const c=document.getElementById('particles'); c.innerHTML='';
+  const clrs=['#d4a052','#e07098','#c04272','#f2b8d0','#ffffff','#a060e0'];
+  for(let i=0;i<22;i++){
+    const p=document.createElement('div'); p.className='particle';
+    const ang=Math.random()*360,dist=55+Math.random()*115,sz=4+Math.random()*7;
+    p.style.cssText=`width:${sz}px;height:${sz}px;background:${clrs[~~(Math.random()*clrs.length)]};--tx:${Math.cos(ang*Math.PI/180)*dist}px;--ty:${Math.sin(ang*Math.PI/180)*dist}px;--dur:${.5+Math.random()*.7}s;--delay:${Math.random()*.25}s;`;
+    c.appendChild(p);
+  }
+}
+
+/* ═══ BOOT: SVG immediately, 3-D if CDN available ════════ */
+if (window.Telegram?.WebApp) {
+  Telegram.WebApp.ready();   // сигнал — приложение загружено
+  Telegram.WebApp.expand();  // раскрыть на весь экран
+}
+selectDice('d20'); /* show SVG die right now — no waiting */
+
+tryLoadThree().then(ok=>{
+  if(ok && !isRolling){
+    try{ initThreeJS(); }
+    catch(e){ console.warn('Three.js init error:',e); /* SVG stays */ }
+  }
+});
+</script>
+</body>
+</html>

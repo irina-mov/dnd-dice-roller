@@ -1,0 +1,8 @@
+# Секреты — никогда не загружать на GitHub!
+.env
+
+# Мусор системы
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
