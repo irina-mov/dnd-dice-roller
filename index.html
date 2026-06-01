@@ -406,11 +406,21 @@ function settleFace(faceIdx){
 }
 
 /* ── Init Three.js renderer ──────────────────────────────*/
+function dbg(msg){
+  /* временная диагностика — показывает причину в подписи кубика */
+  const el=document.getElementById('diceDesc');
+  if(el) el.textContent='[3D: '+msg+']';
+  console.warn('3D debug:',msg);
+}
+
 function initThreeJS(){
-  /* проверяем WebGL до того как удалять SVG */
+  /* 1. Three.js вообще загружен? */
+  if(typeof THREE==='undefined'){ dbg('THREE не определён — скрипт не загрузился'); return; }
+
+  /* 2. WebGL доступен? */
   const testCvs=document.createElement('canvas');
-  const gl=testCvs.getContext('webgl')||testCvs.getContext('experimental-webgl');
-  if(!gl){ console.warn('WebGL not supported — staying with SVG'); return; }
+  const gl=testCvs.getContext('webgl2')||testCvs.getContext('webgl')||testCvs.getContext('experimental-webgl');
+  if(!gl){ dbg('WebGL недоступен на этом устройстве'); return; }
 
   useThree=true;
   const area=document.getElementById('dieArea');
@@ -418,9 +428,10 @@ function initThreeJS(){
   area.innerHTML=''; svgWrap=null; area.appendChild(cvs);
 
   try{
-    renderer=new THREE.WebGLRenderer({canvas:cvs,alpha:true,antialias:true});
+    renderer=new THREE.WebGLRenderer({canvas:cvs,alpha:true,antialias:false,
+      powerPreference:'default',failIfMajorPerformanceCaveat:false});
   }catch(e){
-    console.warn('WebGLRenderer failed:',e);
+    dbg('Renderer упал: '+e.message);
     useThree=false; area.innerHTML=''; buildSVGDie(); return;
   }
   renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
