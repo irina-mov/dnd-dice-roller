@@ -407,12 +407,22 @@ function settleFace(faceIdx){
 
 /* ── Init Three.js renderer ──────────────────────────────*/
 function initThreeJS(){
+  /* проверяем WebGL до того как удалять SVG */
+  const testCvs=document.createElement('canvas');
+  const gl=testCvs.getContext('webgl')||testCvs.getContext('experimental-webgl');
+  if(!gl){ console.warn('WebGL not supported — staying with SVG'); return; }
+
   useThree=true;
   const area=document.getElementById('dieArea');
   const cvs=document.createElement('canvas'); cvs.id='diceCanvas';
   area.innerHTML=''; svgWrap=null; area.appendChild(cvs);
 
-  renderer=new THREE.WebGLRenderer({canvas:cvs,alpha:true,antialias:true});
+  try{
+    renderer=new THREE.WebGLRenderer({canvas:cvs,alpha:true,antialias:true});
+  }catch(e){
+    console.warn('WebGLRenderer failed:',e);
+    useThree=false; area.innerHTML=''; buildSVGDie(); return;
+  }
   renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
   renderer.setSize(290,290);
 
