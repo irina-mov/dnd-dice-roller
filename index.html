@@ -56,6 +56,13 @@
     .particle  { position:absolute; left:50%; top:50%; border-radius:50%; animation:pflyout var(--dur) ease-out var(--delay) forwards; opacity:0; }
     @keyframes pflyout { 0%{opacity:1;transform:translate(-50%,-50%)translate(0,0)scale(1);}100%{opacity:0;transform:translate(-50%,-50%)translate(var(--tx),var(--ty))scale(.1);} }
 
+    /* pair selector */
+    .pair-row   { display:flex; align-items:center; gap:6px; flex-wrap:wrap; justify-content:center; margin-bottom:14px; }
+    .pair-label { color:#7058a0; font-size:.75rem; letter-spacing:1px; white-space:nowrap; }
+    .pair-btn   { background:linear-gradient(145deg,#1e0d3a,#110820); border:1.5px solid #3a1e60; color:#7050a0; font-size:.75rem; font-weight:bold; font-family:Georgia,serif; padding:5px 11px; border-radius:7px; cursor:pointer; transition:all .18s; letter-spacing:1px; }
+    .pair-btn:hover   { border-color:#52a0d4; color:#52c8e8; }
+    .pair-btn.active  { background:linear-gradient(145deg,#0d2a4a,#071828); border-color:#52a0d4; color:#52d4f0; box-shadow:0 0 12px rgba(82,160,212,.4); }
+
     /* result */
     .result-area   { text-align:center; margin-bottom:20px; min-height:80px; }
     .result-label  { color:#7058a0; font-size:.8rem; margin-bottom:5px; letter-spacing:1px; min-height:20px; }
@@ -63,6 +70,7 @@
     .result-number.hidden { opacity:0; transform:scale(.7); }
     .result-number.pop    { animation:popIn .35s cubic-bezier(.34,1.56,.64,1) forwards; }
     @keyframes popIn { 0%{opacity:0;transform:scale(.5);}100%{opacity:1;transform:scale(1);} }
+    .result-detail { color:#9070b0; font-size:.82rem; margin-top:7px; letter-spacing:1px; min-height:18px; }
 
     /* roll button */
     .roll-btn { background:linear-gradient(135deg,#8b2050 0%,#c94070 45%,#d4a052 100%); background-size:200% 200%; border:none; color:#fff; font-size:1.1rem; font-family:Georgia,serif; font-weight:bold; padding:13px 50px; border-radius:13px; cursor:pointer; letter-spacing:3px; text-transform:uppercase; box-shadow:0 4px 22px rgba(201,64,112,.55); transition:transform .15s,box-shadow .15s,opacity .2s; animation:shimmer 3.5s ease infinite; }
@@ -76,6 +84,7 @@
 <h1>⚔ DnD Dice Roller</h1>
 <p class="subtitle">Бросай кубики судьбы</p>
 <div class="dice-selector" id="diceSelector"></div>
+<div class="pair-row" id="pairSelector"></div>
 <div class="dice-desc" id="diceDesc"></div>
 <div class="pickers-row">
   <div class="picker-group"><span class="picker-label">Цвет куба:</span><div class="swatches" id="diceSwatches"></div></div>
@@ -89,6 +98,7 @@
 <div class="result-area">
   <div class="result-label"  id="resultLabel">Выберите куб и бросьте!</div>
   <div class="result-number hidden" id="resultNumber">1</div>
+  <div class="result-detail" id="resultDetail"></div>
 </div>
 <button class="roll-btn" id="rollBtn" onclick="rollDice()">🎲 Бросить!</button>
 
@@ -137,6 +147,7 @@ let currentDice   = 'd20';
 let currentDieClr = DICE_COLORS[0];
 let isRolling     = false;
 let dieSettled    = false;
+let pairedDice    = null; /* второй кубик для парного броска */
 
 /* ═══ HELPERS ════════════════════════════════════════════ */
 function lighten(hex,a){
@@ -144,6 +155,31 @@ function lighten(hex,a){
   return '#'+[n>>16&0xff,n>>8&0xff,n&0xff].map(c=>Math.min(255,c+Math.round(255*a)).toString(16).padStart(2,'0')).join('');
 }
 function rollVal(sides,step){return(Math.floor(Math.random()*(sides/step))+1)*step;}
+
+function updatePairButtons(){
+  const ps=document.getElementById('pairSelector');
+  ps.querySelectorAll('.pair-btn').forEach(b=>{
+    b.classList.toggle('active', b.dataset.key===(pairedDice||''));
+  });
+}
+
+function setPair(key){
+  pairedDice = (key===currentDice) ? null : key; /* нельзя парить кубик сам с собой */
+  updatePairButtons();
+  updateDesc();
+}
+
+function updateDesc(){
+  const el=document.getElementById('diceDesc');
+  if(pairedDice){
+    const isPercent=(currentDice==='d100'&&pairedDice==='d10')||(currentDice==='d10'&&pairedDice==='d100');
+    el.textContent = isPercent
+      ? 'D100 + D10 — Процентный бросок (результат 1–100)'
+      : `${DICE[currentDice].label.toUpperCase()} + ${DICE[pairedDice].label.toUpperCase()} — Парный бросок, сумма`;
+  } else {
+    el.textContent=`${DICE[currentDice].name} — ${DICE[currentDice].desc}`;
+  }
+}
 
 /* ═══ UI INIT ════════════════════════════════════════════ */
 (function initUI(){
@@ -154,6 +190,16 @@ function rollVal(sides,step){return(Math.floor(Math.random()*(sides/step))+1)*st
     b.className='dice-btn'+(k===currentDice?' active':'');
     b.textContent=DICE[k].label.toUpperCase();
     b.addEventListener('click',()=>selectDice(k)); sel.appendChild(b);
+  });
+  /* pair selector */
+  const ps=document.getElementById('pairSelector');
+  const lbl=document.createElement('span'); lbl.className='pair-label'; lbl.textContent='+ пара:'; ps.appendChild(lbl);
+  /* "none" button */
+  const nb=document.createElement('button'); nb.className='pair-btn active'; nb.textContent='—'; nb.dataset.key='';
+  nb.addEventListener('click',()=>setPair(null)); ps.appendChild(nb);
+  Object.keys(DICE).forEach(k=>{
+    const b=document.createElement('button'); b.className='pair-btn'; b.textContent=DICE[k].label.toUpperCase();
+    b.dataset.key=k; b.addEventListener('click',()=>setPair(k)); ps.appendChild(b);
   });
   /* die colour swatches */
   const ds=document.getElementById('diceSwatches');
@@ -479,8 +525,11 @@ function rebuildDie(){
 
 function selectDice(key){
   currentDice=key;
+  /* если пара совпадает с новым основным — сбрасываем пару */
+  if(pairedDice===key) pairedDice=null;
   document.querySelectorAll('.dice-btn').forEach((b,i)=>b.classList.toggle('active',Object.keys(DICE)[i]===key));
-  document.getElementById('diceDesc').textContent=`${DICE[key].name} — ${DICE[key].desc}`;
+  updatePairButtons();
+  updateDesc();
   dieSettled=false; settling=false; rollingNow=false;
   rebuildDie();
 }
@@ -490,24 +539,56 @@ function rollDice(){
   if(isRolling)return;
   isRolling=true; dieSettled=false; settling=false;
 
-  const d=DICE[currentDice], final=rollVal(d.sides,d.step);
+  const d=DICE[currentDice];
   const btn=document.getElementById('rollBtn');
   const rNum=document.getElementById('resultNumber');
   const rLbl=document.getElementById('resultLabel');
+  const rDet=document.getElementById('resultDetail');
 
-  btn.disabled=true; rNum.classList.add('hidden'); rLbl.textContent='... бросаем ...';
+  /* ── вычисляем финальные значения ── */
+  let final, final2=null, total=null, isPercent=false;
+  if(pairedDice){
+    const d2=DICE[pairedDice];
+    isPercent=(currentDice==='d100'&&pairedDice==='d10')||(currentDice==='d10'&&pairedDice==='d100');
+    if(isPercent){
+      /* процентный бросок: tens 0/10/20…90 + units 1-10 */
+      const tens=Math.floor(Math.random()*10)*10;
+      const units=Math.floor(Math.random()*10)+1;
+      final=(currentDice==='d100')?tens:units;
+      final2=(currentDice==='d100')?units:tens;
+      total=(tens===0&&units===10)?100:tens+units;
+    }else{
+      final=rollVal(d.sides,d.step);
+      final2=rollVal(d2.sides,d2.step);
+      total=final+final2;
+    }
+  }else{
+    final=rollVal(d.sides,d.step);
+  }
+
+  btn.disabled=true; rNum.classList.add('hidden'); rLbl.textContent='... бросаем ...'; rDet.textContent='';
 
   const scramble=setInterval(()=>{
     const v=rollVal(d.sides,d.step);
-    rNum.textContent=v;
-    if(!useThree&&svgWrap)svgWrap.innerHTML=makeSVG(currentDice,v);
+    rNum.textContent = pairedDice ? '?' : v;
+    if(!useThree&&svgWrap) svgWrap.innerHTML=makeSVG(currentDice, pairedDice?rollVal(d.sides,d.step):v);
   },90);
 
   const showResult=()=>{
     clearInterval(scramble);
-    if(!useThree&&svgWrap)svgWrap.innerHTML=makeSVG(currentDice,final);
+    if(!useThree&&svgWrap) svgWrap.innerHTML=makeSVG(currentDice,final);
     rNum.classList.remove('hidden','pop'); void rNum.offsetWidth; rNum.classList.add('pop');
-    rNum.textContent=final; rLbl.textContent=DICE[currentDice].name;
+    if(pairedDice){
+      const lbl1=DICE[currentDice].label.toUpperCase();
+      const lbl2=DICE[pairedDice].label.toUpperCase();
+      rNum.textContent=total;
+      rLbl.textContent=isPercent?'Процентный бросок':'Сумма';
+      rDet.textContent=`${lbl1}: ${final} + ${lbl2}: ${final2} = ${total}`;
+    }else{
+      rNum.textContent=final;
+      rLbl.textContent=DICE[currentDice].name;
+      rDet.textContent='';
+    }
   };
 
   if(useThree){
