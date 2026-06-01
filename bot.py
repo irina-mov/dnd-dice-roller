@@ -21,7 +21,11 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 if __name__ == "__main__":
     load_dotenv()  # читает .env при локальном запуске
 
+    # debug: показать все ключи окружения
+    print("ENV KEYS:", sorted(os.environ.keys()))
+
     token = os.environ.get("BOT_TOKEN")
+    print("BOT_TOKEN found:", bool(token), "| length:", len(token) if token else 0)
     if not token:
         raise SystemExit("Ошибка: переменная BOT_TOKEN не задана!")
 
